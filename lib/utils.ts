@@ -18,12 +18,16 @@ export function formatPercent(value: number): string {
 
 export function parseNumber(value: string | undefined | null): number {
   if (!value) return 0;
-  const cleaned = value
-    .replace(/R\$\s?/g, "")
-    .replace(/\./g, "")
-    .replace(",", ".")
-    .replace(/%/g, "")
+  // Handle " R$  2.701,76 ", "R$ -", "72%", plain numbers, etc.
+  let cleaned = value
+    .replace(/R\$/g, "")   // remove R$ (no \s? — spaces handled next)
+    .replace(/\s+/g, "")   // remove ALL whitespace
+    .replace(/%/g, "")     // remove %
     .trim();
+  // "R$ -" or just "-" means zero
+  if (cleaned === "-" || cleaned === "") return 0;
+  // BRL format: "2.701,76" → remove dots (thousands), replace comma (decimal)
+  cleaned = cleaned.replace(/\./g, "").replace(",", ".");
   const num = parseFloat(cleaned);
   return isNaN(num) ? 0 : num;
 }

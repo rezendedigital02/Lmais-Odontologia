@@ -28,11 +28,18 @@ export default function NPSPage() {
     responses: Record<string, unknown>[];
     periods: { label: string; promotores: number; neutros: number; detratores: number; nps: number; total: number }[];
     criteriaAverages: Record<string, number>;
+    criteriaLabels: string[];
   } | undefined;
 
   const responses = nps?.responses || [];
   const periods = nps?.periods || [];
   const criteriaAverages = nps?.criteriaAverages || {};
+  const criteriaLabels = nps?.criteriaLabels || [];
+
+  // Pick a subset of criteria for the table (first 5 or all if <= 6)
+  const tableCriteria = criteriaLabels.length <= 6
+    ? criteriaLabels
+    : criteriaLabels.slice(0, 5);
 
   const mainPeriod = periods[0] || {
     label: "Todo período",
@@ -145,7 +152,7 @@ export default function NPSPage() {
         )}
       </div>
 
-      {/* Latest responses table */}
+      {/* Latest responses table - uses dynamic criteria labels */}
       <div className="bg-card rounded-lg border border-border p-5">
         <h3 className="text-sm font-semibold text-foreground mb-4">
           Últimas Avaliações
@@ -156,11 +163,11 @@ export default function NPSPage() {
               <tr className="border-b border-border">
                 <th className="text-left py-2 px-2 text-muted">Data</th>
                 <th className="text-left py-2 px-2 text-muted">Paciente</th>
-                <th className="text-center py-2 px-2 text-muted">Pontualidade</th>
-                <th className="text-center py-2 px-2 text-muted">Limpeza</th>
-                <th className="text-center py-2 px-2 text-muted">Atendimento</th>
-                <th className="text-center py-2 px-2 text-muted">Profissionalismo</th>
-                <th className="text-center py-2 px-2 text-muted">Conforto</th>
+                {tableCriteria.map((label) => (
+                  <th key={label} className="text-center py-2 px-2 text-muted">
+                    {label.length > 14 ? label.substring(0, 11) + "..." : label}
+                  </th>
+                ))}
                 <th className="text-left py-2 px-2 text-muted">Comentário</th>
               </tr>
             </thead>
@@ -172,71 +179,24 @@ export default function NPSPage() {
                 >
                   <td className="py-2 px-2">{r.data as string}</td>
                   <td className="py-2 px-2">{r.paciente as string}</td>
-                  <td className="py-2 px-2 text-center">
-                    <span
-                      className={`inline-block w-6 h-6 rounded-full text-white text-center leading-6 ${
-                        (r.pontualidade as number) >= 9
-                          ? "bg-green-500"
-                          : (r.pontualidade as number) >= 7
-                          ? "bg-yellow-500"
-                          : "bg-red-500"
-                      }`}
-                    >
-                      {r.pontualidade as number}
-                    </span>
-                  </td>
-                  <td className="py-2 px-2 text-center">
-                    <span
-                      className={`inline-block w-6 h-6 rounded-full text-white text-center leading-6 ${
-                        (r.limpeza as number) >= 9
-                          ? "bg-green-500"
-                          : (r.limpeza as number) >= 7
-                          ? "bg-yellow-500"
-                          : "bg-red-500"
-                      }`}
-                    >
-                      {r.limpeza as number}
-                    </span>
-                  </td>
-                  <td className="py-2 px-2 text-center">
-                    <span
-                      className={`inline-block w-6 h-6 rounded-full text-white text-center leading-6 ${
-                        (r.atendimentoRecepcao as number) >= 9
-                          ? "bg-green-500"
-                          : (r.atendimentoRecepcao as number) >= 7
-                          ? "bg-yellow-500"
-                          : "bg-red-500"
-                      }`}
-                    >
-                      {r.atendimentoRecepcao as number}
-                    </span>
-                  </td>
-                  <td className="py-2 px-2 text-center">
-                    <span
-                      className={`inline-block w-6 h-6 rounded-full text-white text-center leading-6 ${
-                        (r.profissionalismo as number) >= 9
-                          ? "bg-green-500"
-                          : (r.profissionalismo as number) >= 7
-                          ? "bg-yellow-500"
-                          : "bg-red-500"
-                      }`}
-                    >
-                      {r.profissionalismo as number}
-                    </span>
-                  </td>
-                  <td className="py-2 px-2 text-center">
-                    <span
-                      className={`inline-block w-6 h-6 rounded-full text-white text-center leading-6 ${
-                        (r.conforto as number) >= 9
-                          ? "bg-green-500"
-                          : (r.conforto as number) >= 7
-                          ? "bg-yellow-500"
-                          : "bg-red-500"
-                      }`}
-                    >
-                      {r.conforto as number}
-                    </span>
-                  </td>
+                  {tableCriteria.map((label) => {
+                    const val = (r[label] as number) || 0;
+                    return (
+                      <td key={label} className="py-2 px-2 text-center">
+                        <span
+                          className={`inline-block w-6 h-6 rounded-full text-white text-center leading-6 ${
+                            val >= 9
+                              ? "bg-green-500"
+                              : val >= 7
+                              ? "bg-yellow-500"
+                              : "bg-red-500"
+                          }`}
+                        >
+                          {val || "-"}
+                        </span>
+                      </td>
+                    );
+                  })}
                   <td className="py-2 px-2 max-w-[200px] truncate">
                     {r.comentario as string}
                   </td>

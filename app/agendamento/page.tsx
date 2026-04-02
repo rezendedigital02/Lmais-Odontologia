@@ -215,7 +215,7 @@ export default function AgendamentoPage() {
                   <td className="py-2 px-2 text-right">{(d.comparecidosParticular as number) || 0}</td>
                   <td className="py-2 px-2 text-right">{((d.orcamentosPlano as number) || 0) + ((d.orcamentosParticular as number) || 0)}</td>
                   <td className="py-2 px-2 text-right">{((d.fechadosPlano as number) || 0) + ((d.fechadosParticular as number) || 0)}</td>
-                  <td className="py-2 px-2 text-right font-medium">{formatBRL((d.totalDia as number) || 0)}</td>
+                  <td className="py-2 px-2 text-right font-medium">{formatBRL(((d.totalDiaPlano as number) || 0) + ((d.totalDiaParticular as number) || 0))}</td>
                 </tr>
               ))}
             </tbody>
