@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSheetData } from "@/lib/sheets";
 import { parseNumber } from "@/lib/utils";
 
+// Use large ranges to ensure we capture all data; Google Sheets ignores empty trailing rows
 const TAB_RANGES: Record<string, string> = {
-  cod: "A1:Z50",
-  agendamento: "A1:V200",
-  meta: "A1:G50",
+  cod: "A1:Z100",
+  agendamento: "A1:V500",
+  meta: "A1:G500",
   nps: "A1:N100",
   repasse: "A1:F50",
 };
@@ -66,85 +67,170 @@ function parseTabData(tab: string, data: string[][]) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// COD Parser
+// ---------------------------------------------------------------------------
+// Structure:
+//   Column A (index 0): Category group names, merged vertically
+//     - Rows 7-18  = "Estrutura Física e Utilidades"
+//     - Rows 19-24 = "Equipe e Encargos"
+//     - Rows 25+   = "Administrativo/Sistema/Operacional", "Marketing", "Manutenção Básica"
+//   Column B (index 1): Item name (e.g. "Aluguel", "IPTU", etc.)
+//   Columns C-D (index 2-3): Value breakdown
+//   Column E (index 4): Total per item
+//   A specific row contains "Total" / "Total Geral" with grand total in column E
+// ---------------------------------------------------------------------------
 function parseCOD(data: string[][]) {
   const items: { categoria: string; item: string; valor: number }[] = [];
   const groups: Record<string, { categoria: string; item: string; valor: number }[]> = {};
   let currentGroup = "";
   let total = 0;
 
-  for (let i = 5; i < data.length; i++) {
+  for (let i = 0; i < data.length; i++) {
     const row = data[i];
-    if (!row || row.length < 2) continue;
+    if (!row) continue;
 
+    const colA = row[0]?.trim() || "";
     const colB = row[1]?.trim() || "";
     const colE = row[4]?.trim() || "";
 
-    if (!colB) continue;
-
-    if (colB.toLowerCase().includes("total geral") || colB.toLowerCase() === "total") {
-      total = parseNumber(colE);
-      continue;
-    }
-
-    // Check if this is a group header (no value in column E, or text-like)
+    // Column A carries the category group name (merged cells).
+    // When A is non-empty and doesn't look like a header/total, update the current group.
     if (
-      colB &&
-      !colE &&
-      !parseNumber(row[2]) &&
-      !parseNumber(row[3])
+      colA &&
+      !colA.toLowerCase().includes("total") &&
+      !colA.toLowerCase().includes("cod") &&
+      !colA.toLowerCase().includes("custo") &&
+      i >= 5 // skip header rows
     ) {
-      currentGroup = colB;
-      if (!groups[currentGroup]) groups[currentGroup] = [];
-      continue;
+      // Only treat it as a group if it looks like a category name (not a number)
+      if (!parseNumber(colA) || colA.length > 10) {
+        currentGroup = colA;
+        if (!groups[currentGroup]) groups[currentGroup] = [];
+      }
     }
 
-    const valor = parseNumber(colE) || parseNumber(row[2]) || parseNumber(row[3]);
-    if (valor > 0) {
-      const item = { categoria: currentGroup, item: colB, valor };
-      items.push(item);
-      if (!groups[currentGroup]) groups[currentGroup] = [];
-      groups[currentGroup].push(item);
+    // Detect total rows in either column A or B
+    const totalCandidate = colA.toLowerCase() + " " + colB.toLowerCase();
+    if (
+      totalCandidate.includes("total geral") ||
+      totalCandidate.includes("total cod") ||
+      (totalCandidate.includes("total") &&
+        !totalCandidate.includes("subtotal") &&
+        colE)
+    ) {
+      const val = parseNumber(colE) || parseNumber(row[2]) || parseNumber(row[3]);
+      if (val > 0) {
+        total = val;
+      }
     }
+
+    // Parse item rows: need a non-empty item name in B, and a numeric value somewhere
+    if (colB && i >= 5) {
+      // Skip header-like rows and total rows
+      if (
+        colB.toLowerCase().includes("total") ||
+        colB.toLowerCase() === "categoria" ||
+        colB.toLowerCase() === "item" ||
+        colB.toLowerCase() === "valor"
+      ) {
+        continue;
+      }
+
+      const valor = parseNumber(colE) || parseNumber(row[3]) || parseNumber(row[2]);
+      if (valor > 0) {
+        const item = { categoria: currentGroup || "Outros", item: colB, valor };
+        items.push(item);
+        const groupKey = currentGroup || "Outros";
+        if (!groups[groupKey]) groups[groupKey] = [];
+        groups[groupKey].push(item);
+      }
+    }
+  }
+
+  // If no total was found via row detection, try to read E7 directly (row index 6)
+  if (total === 0 && data.length > 6 && data[6]) {
+    const e7 = parseNumber(data[6][4]);
+    if (e7 > 0) total = e7;
+  }
+
+  // Fallback: sum all items if still no total
+  if (total === 0 && items.length > 0) {
+    total = items.reduce((s, item) => s + item.valor, 0);
   }
 
   return { items, total, groups };
 }
 
+// ---------------------------------------------------------------------------
+// Agendamento Parser
+// ---------------------------------------------------------------------------
+// Structure: Repeating blocks per week. Each block has:
+//   - Optional "Semana X" header row in column A
+//   - Day headers: "Segunda - 23/03", "Terça - 24/03", etc.
+//   - Professional rows below each day: name in A, data in B-L
+//     B(1): Agendados Plano
+//     C(2): Agendados Particular
+//     D(3): Comparecidos Plano
+//     E(4): Comparecidos Particular
+//     F(5): Orçamentos Plano
+//     G(6): Orçamentos Particular
+//     H(7): Fechados Plano
+//     I(8): Fechados Particular
+//     J(9): Fechados R$ Plano
+//     K(10): Fechados R$ Particular
+//     L(11): Total dia
+//   - Weekly summaries in columns O-V (index 14-21) on the right side
+// ---------------------------------------------------------------------------
 function parseAgendamento(data: string[][]) {
   const daily: Record<string, unknown>[] = [];
   const weeklySummaries: Record<string, unknown>[] = [];
 
-  // Parse weekly summary blocks from columns O-V area
-  // The structure repeats in blocks per week
   let currentWeek = "";
-  let currentProfissional = "";
+  let currentDay = "";
+  let weekCounter = 0;
+
+  const dayPatterns = ["segunda", "terça", "terca", "quarta", "quinta", "sexta", "sábado", "sabado"];
+  const profNames = ["luciana", "pedro", "leila", "giovanna", "joice"];
 
   for (let i = 0; i < data.length; i++) {
     const row = data[i];
-    if (!row || row.length < 2) continue;
+    if (!row || row.length === 0) continue;
 
     const colA = row[0]?.trim() || "";
+    const colALower = colA.toLowerCase();
 
-    // Detect week headers like "Semana 1", "Semana 2" etc
-    if (colA.toLowerCase().includes("semana")) {
+    // Detect week headers
+    if (colALower.includes("semana")) {
       currentWeek = colA;
+      weekCounter++;
       continue;
     }
 
-    // Detect professional names
-    const profNames = ["luciana", "pedro", "leila", "giovanna", "joice"];
-    if (profNames.some((p) => colA.toLowerCase().includes(p))) {
-      currentProfissional = colA;
+    // Detect day headers (e.g. "Segunda - 23/03" or just "Segunda")
+    const isDayHeader = dayPatterns.some((d) => colALower.startsWith(d));
+    if (isDayHeader) {
+      currentDay = colA;
+      // Auto-assign week if none was explicitly set
+      if (!currentWeek) {
+        currentWeek = `Semana ${weekCounter + 1}`;
+        weekCounter++;
+      }
       continue;
     }
 
-    // Detect day rows
-    const dias = ["segunda", "terça", "quarta", "quinta", "sexta"];
-    if (dias.some((d) => colA.toLowerCase().includes(d))) {
+    // Detect professional rows: column A has a name that matches known professionals,
+    // AND there's some numeric data in the following columns
+    const isProfessional = profNames.some((p) => colALower.includes(p));
+    const hasData =
+      row.length > 1 &&
+      row.slice(1, 12).some((c) => c && parseNumber(c) > 0);
+
+    if (isProfessional && currentDay && hasData) {
       daily.push({
         semana: currentWeek,
-        profissional: currentProfissional,
-        dia: colA,
+        profissional: colA,
+        dia: currentDay,
         agendadosPlano: parseNumber(row[1]),
         agendadosParticular: parseNumber(row[2]),
         comparecidosPlano: parseNumber(row[3]),
@@ -157,30 +243,273 @@ function parseAgendamento(data: string[][]) {
         fechadosRsParticular: parseNumber(row[10]),
         totalDia: parseNumber(row[11]),
       });
+      continue;
     }
 
-    // Check for summary data in columns O-V (index 14-21)
+    // Also capture rows that aren't named professionals but follow a day header
+    // and have numeric data - they might be additional team members
+    if (colA && currentDay && hasData && !isDayHeader && colA.length > 1) {
+      // Check it's not a header/total row
+      if (
+        !colALower.includes("total") &&
+        !colALower.includes("agendado") &&
+        !colALower.includes("capacidade") &&
+        !colALower.includes("semana")
+      ) {
+        daily.push({
+          semana: currentWeek,
+          profissional: colA,
+          dia: currentDay,
+          agendadosPlano: parseNumber(row[1]),
+          agendadosParticular: parseNumber(row[2]),
+          comparecidosPlano: parseNumber(row[3]),
+          comparecidosParticular: parseNumber(row[4]),
+          orcamentosPlano: parseNumber(row[5]),
+          orcamentosParticular: parseNumber(row[6]),
+          fechadosPlano: parseNumber(row[7]),
+          fechadosParticular: parseNumber(row[8]),
+          fechadosRsPlano: parseNumber(row[9]),
+          fechadosRsParticular: parseNumber(row[10]),
+          totalDia: parseNumber(row[11]),
+        });
+      }
+    }
+
+    // Parse weekly summaries from columns O-V (index 14-21)
+    // These appear on the right side of the sheet, alongside the daily data
     if (row.length > 14) {
       const colO = row[14]?.trim() || "";
-      if (colO.toLowerCase().includes("total semana") || colO.toLowerCase().includes("capacidade")) {
+      const colOLower = colO.toLowerCase();
+
+      if (colOLower && (
+        colOLower.includes("total") ||
+        colOLower.includes("capacidade") ||
+        colOLower.includes("comparec") ||
+        colOLower.includes("agendamento") ||
+        colOLower.includes("orçamento") ||
+        colOLower.includes("orcamento") ||
+        colOLower.includes("fechado") ||
+        colOLower.includes("venda") ||
+        colOLower.includes("conversão") ||
+        colOLower.includes("conversao")
+      )) {
         weeklySummaries.push({
           semana: currentWeek,
           label: colO,
-          agendadosPlano: parseNumber(row[15]),
-          agendadosParticular: parseNumber(row[16]),
-          comparecidosPlano: parseNumber(row[17]),
-          comparecidosParticular: parseNumber(row[18]),
-          capacidade: parseNumber(row[19]),
-          totalFechadosRs: parseNumber(row[20]),
+          valorPlano: parseNumber(row[15]),
+          valorParticular: parseNumber(row[16]),
+          valor3: parseNumber(row[17]),
+          valor4: parseNumber(row[18]),
+          valor5: parseNumber(row[19]),
+          valor6: parseNumber(row[20]),
+          valor7: parseNumber(row[21]),
         });
       }
     }
   }
 
-  return { daily, weeklySummaries, raw: data.slice(0, 5) };
+  // Build structured weekly summaries by aggregating raw summary rows per week
+  const weeklyAggregated = buildWeeklyAggregates(weeklySummaries, daily);
+
+  return { daily, weeklySummaries: weeklyAggregated };
 }
 
+function buildWeeklyAggregates(
+  rawSummaries: Record<string, unknown>[],
+  daily: Record<string, unknown>[]
+) {
+  // Group daily data by week and compute aggregates
+  const weekMap = new Map<string, Record<string, unknown>[]>();
+  for (const d of daily) {
+    const week = d.semana as string;
+    if (!weekMap.has(week)) weekMap.set(week, []);
+    weekMap.get(week)!.push(d);
+  }
+
+  const aggregated: Record<string, unknown>[] = [];
+
+  for (const [week, days] of weekMap.entries()) {
+    const agPlano = days.reduce((s, d) => s + ((d.agendadosPlano as number) || 0), 0);
+    const agPart = days.reduce((s, d) => s + ((d.agendadosParticular as number) || 0), 0);
+    const compPlano = days.reduce((s, d) => s + ((d.comparecidosPlano as number) || 0), 0);
+    const compPart = days.reduce((s, d) => s + ((d.comparecidosParticular as number) || 0), 0);
+    const orcTotal = days.reduce(
+      (s, d) => s + ((d.orcamentosPlano as number) || 0) + ((d.orcamentosParticular as number) || 0),
+      0
+    );
+    const fechTotal = days.reduce(
+      (s, d) => s + ((d.fechadosPlano as number) || 0) + ((d.fechadosParticular as number) || 0),
+      0
+    );
+    const totalRs = days.reduce(
+      (s, d) => s + ((d.fechadosRsPlano as number) || 0) + ((d.fechadosRsParticular as number) || 0),
+      0
+    );
+
+    // Also try to extract from the raw summary rows for this week
+    const weekSummaries = rawSummaries.filter((s) => s.semana === week);
+    let capacidade = 0;
+    let totalFechadosRs = totalRs;
+
+    for (const s of weekSummaries) {
+      const label = ((s.label as string) || "").toLowerCase();
+      if (label.includes("capacidade")) {
+        capacidade =
+          (s.valorPlano as number) ||
+          (s.valorParticular as number) ||
+          (s.valor3 as number) ||
+          0;
+      }
+      if (label.includes("fechado") && label.includes("r$")) {
+        const fromSummary =
+          (s.valorPlano as number) ||
+          (s.valorParticular as number) ||
+          0;
+        if (fromSummary > 0) totalFechadosRs = fromSummary;
+      }
+      if (label.includes("venda")) {
+        const fromSummary =
+          (s.valorPlano as number) ||
+          (s.valorParticular as number) ||
+          0;
+        if (fromSummary > 0) totalFechadosRs = fromSummary;
+      }
+    }
+
+    const totalAgendados = agPlano + agPart;
+    const totalComparecidos = compPlano + compPart;
+
+    aggregated.push({
+      semana: week,
+      agendadosPlano: agPlano,
+      agendadosParticular: agPart,
+      comparecidosPlano: compPlano,
+      comparecidosParticular: compPart,
+      capacidade,
+      pctAgendamentoCapacidade:
+        capacidade > 0 ? (totalAgendados / capacidade) * 100 : 0,
+      pctComparecidos:
+        totalAgendados > 0 ? (totalComparecidos / totalAgendados) * 100 : 0,
+      orcamentos: orcTotal,
+      fechados: fechTotal,
+      totalFechadosRs,
+      pctConversao: orcTotal > 0 ? (fechTotal / orcTotal) * 100 : 0,
+    });
+  }
+
+  return aggregated;
+}
+
+// ---------------------------------------------------------------------------
+// Meta Parser
+// ---------------------------------------------------------------------------
+// Structure: Multiple month blocks stacked vertically.
+//   Column A (0): Month name (e.g. "Abril 26") — appears once at the start of each block
+//   Column B (1): Day number (1, 2, 6, 7, ...)
+//   Column C (2): Meta diária
+//   Column D (3): Alcançado (daily)
+//   Column E (4): Faltam (daily)
+//   Column F (5): Summary labels OR values for the month
+//   Column G (6): Summary values
+//
+// IMPORTANT: We must find the LAST (current) month block and only parse that.
+// The user reports April 26 starts at row 221 with:
+//   F222 = Meta mensal = R$ 150.000,00
+//   F226 = Alcançado = R$ 13.612,42
+//   F230 = Atingido = 9,07%
+// ---------------------------------------------------------------------------
 function parseMeta(data: string[][]) {
+  // Step 1: Find all month block start positions (rows where column A has a month name)
+  const monthStarts: { row: number; name: string }[] = [];
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    if (!row) continue;
+    const colA = row[0]?.trim() || "";
+    // Month names: "Janeiro 26", "Fevereiro 26", "Março 26", "Abril 26", etc.
+    // Or just "Janeiro", "Fevereiro", etc.
+    if (colA && isMonthName(colA)) {
+      monthStarts.push({ row: i, name: colA });
+    }
+  }
+
+  // Use the LAST month block (current month)
+  if (monthStarts.length === 0) {
+    return {
+      mes: "",
+      metaMensal: 0,
+      metaDiaria: 0,
+      alcancadoTotal: 0,
+      faltam: 0,
+      pctAtingido: 0,
+      dias: [],
+    };
+  }
+
+  const currentMonth = monthStarts[monthStarts.length - 1];
+  const startRow = currentMonth.row;
+  const endRow =
+    monthStarts.length > 1
+      ? data.length // go to end since it's the last month
+      : data.length;
+
+  // Step 2: Extract summary data from columns F-G within this month block
+  let metaMensal = 0;
+  let metaDiaria = 0;
+  let alcancadoTotal = 0;
+  let faltam = 0;
+  let pctAtingido = 0;
+
+  for (let i = startRow; i < endRow; i++) {
+    const row = data[i];
+    if (!row) continue;
+
+    const colF = row[5]?.trim() || "";
+    const colG = row[6]?.trim() || "";
+    const colFLower = colF.toLowerCase();
+
+    // Try label in F, value in G
+    if (colFLower && colG) {
+      if (colFLower.includes("meta") && colFLower.includes("mensal")) {
+        metaMensal = parseNumber(colG);
+      } else if (colFLower.includes("meta") && colFLower.includes("diária")) {
+        metaDiaria = parseNumber(colG);
+      } else if (colFLower.includes("meta") && colFLower.includes("diaria")) {
+        metaDiaria = parseNumber(colG);
+      } else if (colFLower.includes("alcançado") || colFLower.includes("alcancado")) {
+        alcancadoTotal = parseNumber(colG);
+      } else if (colFLower.includes("falta")) {
+        faltam = parseNumber(colG);
+      } else if (colFLower.includes("atingido")) {
+        pctAtingido = parseNumber(colG);
+      }
+    }
+
+    // Also try: label in E, value in F (alternative layout)
+    const colE = row[4]?.trim() || "";
+    const colELower = colE.toLowerCase();
+    if (colELower && colF) {
+      if (colELower.includes("meta") && colELower.includes("mensal") && !metaMensal) {
+        metaMensal = parseNumber(colF);
+      } else if ((colELower.includes("meta") && colELower.includes("diária")) && !metaDiaria) {
+        metaDiaria = parseNumber(colF);
+      } else if ((colELower.includes("alcançado") || colELower.includes("alcancado")) && !alcancadoTotal) {
+        alcancadoTotal = parseNumber(colF);
+      } else if (colELower.includes("falta") && !faltam) {
+        faltam = parseNumber(colF);
+      } else if (colELower.includes("atingido") && !pctAtingido) {
+        pctAtingido = parseNumber(colF);
+      }
+    }
+
+    // Also try: F has a keyword AND a numeric value in the same cell (e.g. "R$ 150.000,00")
+    // or F is purely a label-like value at a known position
+    if (colFLower.includes("meta") && !metaMensal) {
+      const numInF = parseNumber(colF);
+      if (numInF > 1000) metaMensal = numInF;
+    }
+  }
+
+  // Step 3: Extract daily data from columns B-E
   const dias: {
     dia: number;
     metaDiaria: number;
@@ -188,61 +517,14 @@ function parseMeta(data: string[][]) {
     faltam: number;
   }[] = [];
 
-  let metaMensal = 0;
-  let metaDiaria = 0;
-  let alcancadoTotal = 0;
-  let faltam = 0;
-  let pctAtingido = 0;
-  let mes = "";
-
-  for (let i = 0; i < data.length; i++) {
+  for (let i = startRow; i < endRow; i++) {
     const row = data[i];
-    if (!row || row.length < 2) continue;
+    if (!row) continue;
 
-    const colA = row[0]?.trim() || "";
     const colB = row[1]?.trim() || "";
-    const colF = row[5]?.trim() || "";
-
-    // First row usually has the month name
-    if (i === 0 && colA) {
-      mes = colA;
-    }
-
-    // Look for meta mensal in column F area
-    if (colF) {
-      if (colF.toLowerCase().includes("meta") && row[6]) {
-        metaMensal = parseNumber(row[6]);
-      }
-      if (colF.toLowerCase().includes("diária") && row[6]) {
-        metaDiaria = parseNumber(row[6]);
-      }
-      if (colF.toLowerCase().includes("alcançado") && row[6]) {
-        alcancadoTotal = parseNumber(row[6]);
-      }
-      if (colF.toLowerCase().includes("falta") && row[6]) {
-        faltam = parseNumber(row[6]);
-      }
-      if (colF.toLowerCase().includes("atingido") && row[6]) {
-        pctAtingido = parseNumber(row[6]);
-      }
-    }
-
-    // Parse daily data (col B = day number, C = meta, D = alcançado, E = faltam)
     const dayNum = parseInt(colB);
-    if (dayNum > 0 && dayNum <= 31) {
-      let metaAcumulada = 0;
-      let alcancadoAcumulado = 0;
-      const prevDays = dias;
-      if (prevDays.length > 0) {
-        metaAcumulada =
-          prevDays.reduce((s, d) => s + d.metaDiaria, 0) + parseNumber(row[2]);
-        alcancadoAcumulado =
-          prevDays.reduce((s, d) => s + d.alcancado, 0) + parseNumber(row[3]);
-      } else {
-        metaAcumulada = parseNumber(row[2]);
-        alcancadoAcumulado = parseNumber(row[3]);
-      }
 
+    if (dayNum > 0 && dayNum <= 31) {
       dias.push({
         dia: dayNum,
         metaDiaria: parseNumber(row[2]),
@@ -252,7 +534,7 @@ function parseMeta(data: string[][]) {
     }
   }
 
-  // Calculate accumulated values
+  // Step 4: Calculate accumulated values
   let metaAcc = 0;
   let alcAcc = 0;
   const diasComAcumulado = dias.map((d) => {
@@ -261,22 +543,22 @@ function parseMeta(data: string[][]) {
     return { ...d, metaAcumulada: metaAcc, alcancadoAcumulado: alcAcc };
   });
 
-  // Fallback calculations
+  // Step 5: Fallback calculations
   if (!metaMensal && metaDiaria && dias.length) {
     metaMensal = metaDiaria * dias.length;
   }
-  if (!alcancadoTotal) {
+  if (!alcancadoTotal && dias.length) {
     alcancadoTotal = dias.reduce((s, d) => s + d.alcancado, 0);
   }
   if (!faltam && metaMensal) {
-    faltam = metaMensal - alcancadoTotal;
+    faltam = Math.max(0, metaMensal - alcancadoTotal);
   }
   if (!pctAtingido && metaMensal) {
     pctAtingido = (alcancadoTotal / metaMensal) * 100;
   }
 
   return {
-    mes,
+    mes: currentMonth.name,
     metaMensal,
     metaDiaria,
     alcancadoTotal,
@@ -286,6 +568,30 @@ function parseMeta(data: string[][]) {
   };
 }
 
+const MONTH_NAMES = [
+  "janeiro",
+  "fevereiro",
+  "março",
+  "marco",
+  "abril",
+  "maio",
+  "junho",
+  "julho",
+  "agosto",
+  "setembro",
+  "outubro",
+  "novembro",
+  "dezembro",
+];
+
+function isMonthName(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+  return MONTH_NAMES.some((m) => lower.startsWith(m));
+}
+
+// ---------------------------------------------------------------------------
+// NPS Parser (working correctly per user feedback — kept as-is)
+// ---------------------------------------------------------------------------
 function parseNPS(data: string[][]) {
   const responses: Record<string, unknown>[] = [];
   const criteriaKeys = [
@@ -313,7 +619,6 @@ function parseNPS(data: string[][]) {
     "Acompanhamento pós",
   ];
 
-  // Parse individual responses (skip header row)
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     if (!row || row.length < 3) continue;
@@ -322,20 +627,14 @@ function parseNPS(data: string[][]) {
     const paciente = row[1]?.trim();
     if (!date || !paciente) continue;
 
-    const response: Record<string, unknown> = {
-      data: date,
-      paciente,
-    };
-
+    const response: Record<string, unknown> = { data: date, paciente };
     for (let j = 0; j < criteriaKeys.length; j++) {
       response[criteriaKeys[j]] = parseNumber(row[j + 2]);
     }
     response.comentario = row[12]?.trim() || "";
-
     responses.push(response);
   }
 
-  // Calculate criteria averages
   const criteriaAverages: Record<string, number> = {};
   for (let j = 0; j < criteriaKeys.length; j++) {
     const values = responses
@@ -347,7 +646,6 @@ function parseNPS(data: string[][]) {
         : 0;
   }
 
-  // Calculate NPS for different periods
   function calcNPS(resps: Record<string, unknown>[]) {
     const scores = resps.map((r) => {
       const vals = criteriaKeys.map((k) => r[k] as number).filter((v) => v > 0);
@@ -362,13 +660,14 @@ function parseNPS(data: string[][]) {
   }
 
   const allNPS = calcNPS(responses);
-  const periods: { label: string; promotores: number; neutros: number; detratores: number; nps: number; total: number }[] = [
-    { label: "Todo período", ...allNPS },
-  ];
+  const periods = [{ label: "Todo período", ...allNPS }];
 
   return { responses, periods, criteriaAverages };
 }
 
+// ---------------------------------------------------------------------------
+// Repasse Parser (working correctly per user feedback — kept as-is)
+// ---------------------------------------------------------------------------
 function parseRepasse(data: string[][]) {
   const items: {
     procedimento: string;
@@ -389,7 +688,6 @@ function parseRepasse(data: string[][]) {
     const colB = row[1]?.trim() || "";
     const colC = row[2]?.trim() || "";
 
-    // Check if this is a convenio header
     if (
       colB &&
       !parseNumber(colC) &&

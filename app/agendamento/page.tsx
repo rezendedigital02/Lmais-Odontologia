@@ -14,7 +14,6 @@ export default function AgendamentoPage() {
   const agend = data as {
     daily: Record<string, unknown>[];
     weeklySummaries: Record<string, unknown>[];
-    raw: string[][];
   } | undefined;
 
   const daily = agend?.daily || [];
