@@ -25,11 +25,14 @@ export function Header() {
   }, []);
 
   return (
-    <header className="bg-card border-b border-border px-6 py-3 flex items-center justify-between sticky top-0 z-20">
-      <h2 className="text-lg font-semibold text-primary">Dashboard Clínica</h2>
-      <div className="flex items-center gap-2 text-xs text-muted">
-        <RefreshCw size={12} />
-        <span>Atualizado: {lastUpdate}</span>
+    <header className="bg-card border-b border-border px-3 py-2 md:px-6 md:py-3 flex items-center justify-between sticky top-0 z-20">
+      <h2 className="text-sm md:text-lg font-semibold text-primary">
+        Dashboard Clínica
+      </h2>
+      <div className="flex items-center gap-1.5 md:gap-2 text-[10px] md:text-xs text-muted">
+        <RefreshCw size={10} className="md:w-3 md:h-3" />
+        <span className="hidden sm:inline">Atualizado: {lastUpdate}</span>
+        <span className="sm:hidden">{lastUpdate}</span>
       </div>
     </header>
   );

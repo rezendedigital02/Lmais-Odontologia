@@ -53,6 +53,11 @@ body {
   border-radius: 0.375rem;
 }
 
+/* Safe area for iOS bottom bar */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

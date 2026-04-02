@@ -34,18 +34,18 @@ export function KPICard({
   return (
     <div
       className={cn(
-        "bg-card rounded-lg border border-border p-5 border-l-4 shadow-sm",
+        "bg-card rounded-lg border border-border p-3 sm:p-5 border-l-4 shadow-sm",
         colorMap[color]
       )}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <p className="text-xs font-medium text-muted uppercase tracking-wide">
+          <p className="text-[10px] sm:text-xs font-medium text-muted uppercase tracking-wide">
             {title}
           </p>
-          <p className="text-2xl font-bold mt-1 text-foreground">{value}</p>
+          <p className="text-xl sm:text-2xl font-bold mt-0.5 sm:mt-1 text-foreground">{value}</p>
           {subtitle && (
-            <p className="text-xs text-muted mt-1">{subtitle}</p>
+            <p className="text-[10px] sm:text-xs text-muted mt-0.5 sm:mt-1">{subtitle}</p>
           )}
           {trend && trendValue && (
             <p

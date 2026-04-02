@@ -134,13 +134,13 @@ export default function HomePage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="space-y-4 sm:space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <CardSkeleton key={i} />
           ))}
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
           <ChartSkeleton />
           <ChartSkeleton />
         </div>
@@ -149,8 +149,8 @@ export default function HomePage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         <KPICard
           title="Custo Open Doors"
           value={formatBRL(custoTotal)}
@@ -204,7 +204,7 @@ export default function HomePage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         {metaChartData.length > 0 && (
           <LineChartComponent
             data={metaChartData}
@@ -235,18 +235,18 @@ export default function HomePage() {
       </div>
 
       {/* AI Insights */}
-      <div className="bg-card rounded-lg border border-border p-5">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-card rounded-lg border border-border p-3 sm:p-5">
+        <div className="flex items-center justify-between mb-3 sm:mb-4 gap-2">
           <div className="flex items-center gap-2">
-            <Sparkles size={18} className="text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">
+            <Sparkles size={16} className="text-primary shrink-0" />
+            <h3 className="text-xs sm:text-sm font-semibold text-foreground">
               Insights com IA
             </h3>
           </div>
           <button
             onClick={handleGenerateInsights}
             disabled={insightsLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primary-light transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-primary text-white text-xs sm:text-sm rounded-lg hover:bg-primary-light transition-colors disabled:opacity-50 shrink-0"
           >
             {insightsLoading ? (
               <>

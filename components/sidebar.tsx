@@ -13,12 +13,12 @@ import {
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/", label: "Visão Geral", icon: LayoutDashboard },
-  { href: "/custos", label: "Custos", icon: DollarSign },
-  { href: "/agendamento", label: "Agendamento", icon: CalendarDays },
-  { href: "/meta", label: "Meta", icon: Target },
-  { href: "/nps", label: "NPS", icon: Star },
-  { href: "/repasse", label: "Repasse", icon: ArrowLeftRight },
+  { href: "/", label: "Visão Geral", shortLabel: "Geral", icon: LayoutDashboard },
+  { href: "/custos", label: "Custos", shortLabel: "Custos", icon: DollarSign },
+  { href: "/agendamento", label: "Agendamento", shortLabel: "Agenda", icon: CalendarDays },
+  { href: "/meta", label: "Meta", shortLabel: "Meta", icon: Target },
+  { href: "/nps", label: "NPS", shortLabel: "NPS", icon: Star },
+  { href: "/repasse", label: "Repasse", shortLabel: "Repasse", icon: ArrowLeftRight },
 ];
 
 export function Sidebar() {
@@ -54,8 +54,8 @@ export function Sidebar() {
         </nav>
       </aside>
 
-      {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-sidebar-bg text-sidebar-text z-30 flex justify-around py-2 border-t border-white/10">
+      {/* Mobile bottom navigation bar */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-sidebar-bg text-sidebar-text z-40 flex justify-around items-center py-1.5 border-t border-white/10 safe-area-bottom">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           return (
@@ -63,12 +63,19 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex flex-col items-center gap-0.5 text-[10px] px-2 py-1 rounded transition-colors",
-                isActive ? "text-white font-medium" : "text-white/60"
+                "flex flex-col items-center justify-center gap-0.5 min-w-[3rem] py-1 rounded-md transition-colors",
+                isActive
+                  ? "text-white"
+                  : "text-white/50 active:text-white/80"
               )}
             >
-              <item.icon size={18} />
-              {item.label}
+              <item.icon size={20} strokeWidth={isActive ? 2.5 : 1.5} />
+              <span className={cn(
+                "text-[9px] leading-tight",
+                isActive ? "font-semibold" : "font-normal"
+              )}>
+                {item.shortLabel}
+              </span>
             </Link>
           );
         })}

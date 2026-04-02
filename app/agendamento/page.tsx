@@ -19,7 +19,6 @@ export default function AgendamentoPage() {
   const daily = agend?.daily || [];
   const weeklySummaries = agend?.weeklySummaries || [];
 
-  // Get unique weeks
   const weeks = useMemo(() => {
     const set = new Set<string>();
     daily.forEach((d) => {
@@ -31,10 +30,8 @@ export default function AgendamentoPage() {
 
   const [selectedWeek, setSelectedWeek] = useState<string>("");
   const activeWeek = selectedWeek || weeks[weeks.length - 1] || "";
-
   const weeklyDaily = daily.filter((d) => d.semana === activeWeek);
 
-  // Get unique professionals for the selected week
   const professionals = useMemo(() => {
     const set = new Set<string>();
     weeklyDaily.forEach((d) => {
@@ -44,17 +41,8 @@ export default function AgendamentoPage() {
     return Array.from(set);
   }, [weeklyDaily]);
 
-  // Aggregate metrics for the week
   const weekTotals = useMemo(() => {
-    const totals = {
-      agendadosPlano: 0,
-      agendadosParticular: 0,
-      comparecidosPlano: 0,
-      comparecidosParticular: 0,
-      orcamentos: 0,
-      fechados: 0,
-      totalRs: 0,
-    };
+    const totals = { agendadosPlano: 0, agendadosParticular: 0, comparecidosPlano: 0, comparecidosParticular: 0, orcamentos: 0, fechados: 0, totalRs: 0 };
     weeklyDaily.forEach((d) => {
       totals.agendadosPlano += (d.agendadosPlano as number) || 0;
       totals.agendadosParticular += (d.agendadosParticular as number) || 0;
@@ -72,25 +60,24 @@ export default function AgendamentoPage() {
   const pctComparecimento = totalAgendados > 0 ? (totalComparecidos / totalAgendados) * 100 : 0;
   const pctConversao = weekTotals.orcamentos > 0 ? (weekTotals.fechados / weekTotals.orcamentos) * 100 : 0;
 
-  // Bar chart data by day
   const daysMap = new Map<string, { plano: number; particular: number }>();
   weeklyDaily.forEach((d) => {
     const dia = d.dia as string;
     const existing = daysMap.get(dia) || { plano: 0, particular: 0 };
-    existing.plano += ((d.agendadosPlano as number) || 0);
-    existing.particular += ((d.agendadosParticular as number) || 0);
+    existing.plano += (d.agendadosPlano as number) || 0;
+    existing.particular += (d.agendadosParticular as number) || 0;
     daysMap.set(dia, existing);
   });
   const barData = Array.from(daysMap.entries()).map(([dia, vals]) => ({
-    dia,
+    dia: dia.length > 15 ? dia.substring(0, 12) + "..." : dia,
     Plano: vals.plano,
     Particular: vals.particular,
   }));
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="space-y-4 sm:space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)}
         </div>
         <ChartSkeleton />
@@ -100,13 +87,13 @@ export default function AgendamentoPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-foreground">Agendamento</h1>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-lg sm:text-xl font-bold text-foreground">Agendamento</h1>
         <select
           value={activeWeek}
           onChange={(e) => setSelectedWeek(e.target.value)}
-          className="border border-border rounded-lg px-3 py-2 text-sm bg-card"
+          className="border border-border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-card"
         >
           {weeks.map((w) => (
             <option key={w} value={w}>{w}</option>
@@ -114,7 +101,7 @@ export default function AgendamentoPage() {
         </select>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <KPICard
           title="Total Agendados"
           value={String(totalAgendados)}
@@ -145,11 +132,10 @@ export default function AgendamentoPage() {
         />
       </div>
 
-      {/* Professional cards */}
       {professionals.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-foreground mb-3">Por Profissional</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <h3 className="text-xs sm:text-sm font-semibold text-foreground mb-2 sm:mb-3">Por Profissional</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
             {professionals.map((prof) => {
               const profDays = weeklyDaily.filter((d) => d.profissional === prof);
               const ag = profDays.reduce((s, d) => s + ((d.agendadosPlano as number) || 0) + ((d.agendadosParticular as number) || 0), 0);
@@ -158,9 +144,9 @@ export default function AgendamentoPage() {
               const fech = profDays.reduce((s, d) => s + ((d.fechadosPlano as number) || 0) + ((d.fechadosParticular as number) || 0), 0);
               const rs = profDays.reduce((s, d) => s + ((d.fechadosRsPlano as number) || 0) + ((d.fechadosRsParticular as number) || 0), 0);
               return (
-                <div key={prof} className="bg-card rounded-lg border border-border p-4">
-                  <p className="font-semibold text-sm text-primary mb-2">{prof}</p>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
+                <div key={prof} className="bg-card rounded-lg border border-border p-3 sm:p-4">
+                  <p className="font-semibold text-xs sm:text-sm text-primary mb-1.5 sm:mb-2">{prof}</p>
+                  <div className="grid grid-cols-2 gap-1.5 sm:gap-2 text-[10px] sm:text-xs">
                     <div><span className="text-muted">Agendados:</span> {ag}</div>
                     <div><span className="text-muted">Comparecidos:</span> {comp}</div>
                     <div><span className="text-muted">Orçamentos:</span> {orc}</div>
@@ -186,36 +172,35 @@ export default function AgendamentoPage() {
         />
       )}
 
-      {/* Detailed table */}
-      <div className="bg-card rounded-lg border border-border p-5">
-        <h3 className="text-sm font-semibold text-foreground mb-4">Detalhamento por Dia</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+      <div className="bg-card rounded-lg border border-border p-3 sm:p-5">
+        <h3 className="text-xs sm:text-sm font-semibold text-foreground mb-3 sm:mb-4">Detalhamento por Dia</h3>
+        <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0">
+          <table className="w-full text-[10px] sm:text-xs min-w-[600px]">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left py-2 px-2 text-muted">Dia</th>
-                <th className="text-left py-2 px-2 text-muted">Profissional</th>
-                <th className="text-right py-2 px-2 text-muted">Ag. Plano</th>
-                <th className="text-right py-2 px-2 text-muted">Ag. Part.</th>
-                <th className="text-right py-2 px-2 text-muted">Comp. Plano</th>
-                <th className="text-right py-2 px-2 text-muted">Comp. Part.</th>
-                <th className="text-right py-2 px-2 text-muted">Orç.</th>
-                <th className="text-right py-2 px-2 text-muted">Fech.</th>
-                <th className="text-right py-2 px-2 text-muted">Total R$</th>
+                <th className="text-left py-1.5 sm:py-2 px-1.5 sm:px-2 text-muted">Dia</th>
+                <th className="text-left py-1.5 sm:py-2 px-1.5 sm:px-2 text-muted">Profissional</th>
+                <th className="text-right py-1.5 sm:py-2 px-1.5 sm:px-2 text-muted">Ag.P</th>
+                <th className="text-right py-1.5 sm:py-2 px-1.5 sm:px-2 text-muted">Ag.Pt</th>
+                <th className="text-right py-1.5 sm:py-2 px-1.5 sm:px-2 text-muted">Cp.P</th>
+                <th className="text-right py-1.5 sm:py-2 px-1.5 sm:px-2 text-muted">Cp.Pt</th>
+                <th className="text-right py-1.5 sm:py-2 px-1.5 sm:px-2 text-muted">Orç.</th>
+                <th className="text-right py-1.5 sm:py-2 px-1.5 sm:px-2 text-muted">Fech.</th>
+                <th className="text-right py-1.5 sm:py-2 px-1.5 sm:px-2 text-muted">Total</th>
               </tr>
             </thead>
             <tbody>
               {weeklyDaily.map((d, i) => (
                 <tr key={i} className="border-b border-border/50 hover:bg-background/50">
-                  <td className="py-2 px-2">{d.dia as string}</td>
-                  <td className="py-2 px-2">{d.profissional as string}</td>
-                  <td className="py-2 px-2 text-right">{(d.agendadosPlano as number) || 0}</td>
-                  <td className="py-2 px-2 text-right">{(d.agendadosParticular as number) || 0}</td>
-                  <td className="py-2 px-2 text-right">{(d.comparecidosPlano as number) || 0}</td>
-                  <td className="py-2 px-2 text-right">{(d.comparecidosParticular as number) || 0}</td>
-                  <td className="py-2 px-2 text-right">{((d.orcamentosPlano as number) || 0) + ((d.orcamentosParticular as number) || 0)}</td>
-                  <td className="py-2 px-2 text-right">{((d.fechadosPlano as number) || 0) + ((d.fechadosParticular as number) || 0)}</td>
-                  <td className="py-2 px-2 text-right font-medium">{formatBRL(((d.totalDiaPlano as number) || 0) + ((d.totalDiaParticular as number) || 0))}</td>
+                  <td className="py-1.5 sm:py-2 px-1.5 sm:px-2 whitespace-nowrap">{d.dia as string}</td>
+                  <td className="py-1.5 sm:py-2 px-1.5 sm:px-2">{d.profissional as string}</td>
+                  <td className="py-1.5 sm:py-2 px-1.5 sm:px-2 text-right">{(d.agendadosPlano as number) || 0}</td>
+                  <td className="py-1.5 sm:py-2 px-1.5 sm:px-2 text-right">{(d.agendadosParticular as number) || 0}</td>
+                  <td className="py-1.5 sm:py-2 px-1.5 sm:px-2 text-right">{(d.comparecidosPlano as number) || 0}</td>
+                  <td className="py-1.5 sm:py-2 px-1.5 sm:px-2 text-right">{(d.comparecidosParticular as number) || 0}</td>
+                  <td className="py-1.5 sm:py-2 px-1.5 sm:px-2 text-right">{((d.orcamentosPlano as number) || 0) + ((d.orcamentosParticular as number) || 0)}</td>
+                  <td className="py-1.5 sm:py-2 px-1.5 sm:px-2 text-right">{((d.fechadosPlano as number) || 0) + ((d.fechadosParticular as number) || 0)}</td>
+                  <td className="py-1.5 sm:py-2 px-1.5 sm:px-2 text-right font-medium">{formatBRL(((d.totalDiaPlano as number) || 0) + ((d.totalDiaParticular as number) || 0))}</td>
                 </tr>
               ))}
             </tbody>

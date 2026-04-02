@@ -56,8 +56,8 @@ export default function RepassePage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="space-y-4 sm:space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           <CardSkeleton />
           <CardSkeleton />
           <CardSkeleton />
@@ -69,13 +69,13 @@ export default function RepassePage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-foreground">Repasse</h1>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-lg sm:text-xl font-bold text-foreground">Repasse</h1>
         <select
           value={selectedConvenio}
           onChange={(e) => setSelectedConvenio(e.target.value)}
-          className="border border-border rounded-lg px-3 py-2 text-sm bg-card"
+          className="border border-border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-card"
         >
           <option value="todos">Todos os convênios</option>
           {convenios.map((c) => (
@@ -89,16 +89,16 @@ export default function RepassePage() {
       {/* Loss highlights */}
       {lossItems.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-foreground mb-3">
+          <h3 className="text-xs sm:text-sm font-semibold text-foreground mb-2 sm:mb-3">
             Maior Perda de Margem
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
             {lossItems.map((item, i) => (
               <div
                 key={i}
-                className="bg-card rounded-lg border border-border border-l-4 border-l-danger p-4"
+                className="bg-card rounded-lg border border-border border-l-4 border-l-danger p-3 sm:p-4"
               >
-                <p className="text-sm font-medium">{item.procedimento}</p>
+                <p className="text-xs sm:text-sm font-medium">{item.procedimento}</p>
                 <p className="text-xs text-muted mt-1">
                   {item.convenio}
                 </p>
@@ -135,12 +135,12 @@ export default function RepassePage() {
       )}
 
       {/* Full table */}
-      <div className="bg-card rounded-lg border border-border p-5">
-        <h3 className="text-sm font-semibold text-foreground mb-4">
+      <div className="bg-card rounded-lg border border-border p-3 sm:p-5">
+        <h3 className="text-xs sm:text-sm font-semibold text-foreground mb-3 sm:mb-4">
           Todos os Procedimentos ({filteredItems.length})
         </h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0">
+          <table className="w-full text-[10px] sm:text-xs md:text-sm min-w-[500px]">
             <thead>
               <tr className="border-b border-border">
                 <th className="text-left py-2 px-3 text-muted font-medium">

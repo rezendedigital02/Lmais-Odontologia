@@ -15,7 +15,7 @@ export default function NPSPage() {
     return (
       <div className="space-y-6">
         <CardSkeleton />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
           <ChartSkeleton />
           <ChartSkeleton />
         </div>
@@ -66,18 +66,18 @@ export default function NPSPage() {
   }));
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-bold text-foreground">NPS - Satisfação</h1>
+    <div className="space-y-4 sm:space-y-6">
+      <h1 className="text-lg sm:text-xl font-bold text-foreground">NPS - Satisfação</h1>
 
       {/* Big NPS score */}
-      <div className="bg-card rounded-lg border border-border p-8 flex flex-col items-center">
-        <p className="text-sm text-muted mb-2">NPS Score</p>
+      <div className="bg-card rounded-lg border border-border p-5 sm:p-8 flex flex-col items-center">
+        <p className="text-xs sm:text-sm text-muted mb-2">NPS Score</p>
         <div
-          className={`text-6xl font-bold ${getNPSColor(mainPeriod.nps)}`}
+          className={`text-4xl sm:text-6xl font-bold ${getNPSColor(mainPeriod.nps)}`}
         >
           {mainPeriod.nps}%
         </div>
-        <p className="text-sm text-muted mt-2">
+        <p className="text-xs sm:text-sm text-muted mt-2">
           {mainPeriod.nps >= 70
             ? "Zona de Excelência"
             : mainPeriod.nps >= 50
@@ -86,7 +86,7 @@ export default function NPSPage() {
             ? "Zona de Aperfeiçoamento"
             : "Zona Crítica"}
         </p>
-        <div className="flex gap-6 mt-4">
+        <div className="flex flex-wrap justify-center gap-3 sm:gap-6 mt-3 sm:mt-4">
           <div className="flex items-center gap-1.5 text-sm">
             <ThumbsUp size={14} className="text-accent" />
             <span className="text-muted">Promotores:</span>
@@ -129,7 +129,7 @@ export default function NPSPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         {distributionData.length > 0 && (
           <BarChartComponent
             data={distributionData}
@@ -153,12 +153,12 @@ export default function NPSPage() {
       </div>
 
       {/* Latest responses table - uses dynamic criteria labels */}
-      <div className="bg-card rounded-lg border border-border p-5">
-        <h3 className="text-sm font-semibold text-foreground mb-4">
+      <div className="bg-card rounded-lg border border-border p-3 sm:p-5">
+        <h3 className="text-xs sm:text-sm font-semibold text-foreground mb-3 sm:mb-4">
           Últimas Avaliações
         </h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+        <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0">
+          <table className="w-full text-[10px] sm:text-xs min-w-[500px]">
             <thead>
               <tr className="border-b border-border">
                 <th className="text-left py-2 px-2 text-muted">Data</th>
